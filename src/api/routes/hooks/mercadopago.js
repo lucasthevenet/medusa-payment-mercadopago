@@ -1,8 +1,8 @@
 export default async (req, res) => {
   let event;
   try {
-    const stripeProviderService = req.scope.resolve("pp_mercadopago");
-    event = await stripeProviderService.constructWebhookEvent(req.body);
+    const mercadoPagoProviderService = req.scope.resolve("pp_mercadopago");
+    event = await mercadoPagoProviderService.constructWebhookEvent(req.body);
   } catch (err) {
     res.status(400).send(`Webhook Error: ${err.message}`);
     return;

@@ -12,17 +12,20 @@ class MercadoPagoProviderService extends PaymentService {
     /**
      * Required MercadoPago options:
      *  {
-     *    api_key: "stripe_secret_key", REQUIRED
      *    access_token: "meli_access_token", REQUIRED
      *    // Use this flag to capture payment immediately (default is false)
      *    capture: true
+     *   // Description that the payment will appear with in the card statement
+     *   statement_descriptor: 'MEDUSA' REQUIRED
      *  }
      */
     this.options_ = options;
 
     /** @private @const {MercadoPago} */
-    this.mercadopago_ = mercadopago.configure({
-      access_token: options_.access_token,
+    this.mercadopago_ = mercadopago;
+
+    this.mercadopago_.configure({
+      access_token: options.access_token,
     });
 
     /** @private @const {CustomerService} */
@@ -42,11 +45,11 @@ class MercadoPagoProviderService extends PaymentService {
    * @returns {object} MercadoPago payment intent
    */
   async createPayment(cart) {
-    const { customer_id, region_id, email } = cart;
+    const { customer_id, region_id, email, shipping_address, items } = cart;
     const { currency_code } = await this.regionService_.retrieve(region_id);
 
     const amount = await this.totalsService_.getTotal(cart);
-
+    console.log(cart)
     const intentRequest = {
       // currency: currency_code,
       // setup_future_usage: "on_session",
@@ -55,6 +58,22 @@ class MercadoPagoProviderService extends PaymentService {
       metadata: { cart_id: `${cart.id}` },
       description:
         cart?.context?.payment_description ?? this.options?.payment_description,
+      statement_descriptor: this.options?.statement_descriptor,
+      additional_info: {
+        items,
+        shipments: {
+          receiver_address: shipping_address,
+        },
+        payer: {
+          first_name: '',
+          last_name: '',
+          phone: {
+            area_code: '',
+            number: '',
+          },
+          address: {}
+        }
+      }
     };
 
     if (customer_id) {
@@ -132,7 +151,7 @@ class MercadoPagoProviderService extends PaymentService {
         customer.metadata.mercadopago_id
       );
 
-      return methods.data;
+      return methods;
     }
 
     return Promise.resolve([]);
@@ -162,7 +181,8 @@ class MercadoPagoProviderService extends PaymentService {
       });
 
       if (customer.id) {
-        await this.customerService_.update(customer.id, {
+        await this.customerService_.update({
+          id: customer.id,
           metadata: { mercadopago_id: mercadoPagoCustomer.id },
         });
       }
@@ -238,14 +258,15 @@ class MercadoPagoProviderService extends PaymentService {
       const mercadoPagoId =
         cart.customer?.metadata?.mercadopago_id || undefined;
 
-      if (mercadoPagoId !== sessionData.customer) {
+      if (mercadoPagoId !== sessionData?.payer?.id) {
         return this.createPayment(cart);
       } else {
-        if (cart.total && sessionData.amount === Math.round(cart.total)) {
+
+        if (cart.total && sessionData.transaction_amount === Math.round(cart.total)) {
           return sessionData;
         }
 
-        return this.mercadopago_.payments.update({
+        return this.mercadopago_.payment.update({
           id: sessionData.id,
           transaction_amount: Math.round(cart.total),
         });
@@ -298,7 +319,7 @@ class MercadoPagoProviderService extends PaymentService {
   async refundPayment(payment, amountToRefund) {
     const { id } = payment.data;
     try {
-      await this.mercadopago_.refunds.create({
+      await this.mercadopago_.refund.create({
         amount: Math.round(amountToRefund),
         payment_id: id,
       });

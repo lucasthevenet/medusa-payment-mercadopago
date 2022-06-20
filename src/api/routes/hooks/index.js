@@ -9,7 +9,7 @@ export default (app) => {
 
   route.post(
     "/hooks",
-    // stripe constructEvent fails without body-parser
+    // mercadopago constructEvent fails without body-parser
     bodyParser.raw({ type: "application/json" }),
     middlewares.wrap(require("./mercadopago").default)
   );
